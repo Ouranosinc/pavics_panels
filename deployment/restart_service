@@ -6,7 +6,7 @@
 # This script should only be used to restart containers, do not use it to
 # modify files, files it touches will have wrong permissions.
 
-if [ -n "`echo "$GIT_CHANGED_FILES" | grep Sensibilité/`" -o -z "$GIT_PREVIOUS_COMMIT_HASH" ]; then
+if [ -n "`echo "$GIT_CHANGED_FILES" | grep 'Sensibilit\303\251/'`" -o -z "$GIT_PREVIOUS_COMMIT_HASH" ]; then
     if [ -n "`docker ps --format '{{.Names}}' | grep sensibilite_climatique_ouranos`" ]; then
         # Restart only if files under Sensibilité/ changes or on
         # first clone when GIT_PREVIOUS_COMMIT_HASH is emtpy.
