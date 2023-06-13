@@ -7,9 +7,16 @@ tas.columns = tas.columns.str.split("_", expand=True)
 tas = xr.DataArray(tas,dims=['year','model'],name='tas').rename({"model_level_0":"generation","model_level_1":"center","model_level_2":"scenario","model_level_3":"realization"})
 import json
 import urllib
+from pathlib import Path
 zelinka_url = "https://raw.githubusercontent.com/mzelinka/cmip56_forcing_feedback_ecs/master/cmip56_forcing_feedback_ecs.json"
-data = urllib.request.urlopen(zelinka_url)
-zelinka = json.load(data)
+zelinka_file = Path("zelinka_full.json")
+if zelinka_file.is_file():
+    zelinka = json.load(open(zelinka_file))
+else:
+    data = urllib.request.urlopen(zelinka_url)
+    zelinka = json.load(data)
+    json.dump(zelinka, open(zelinka_file, "w"))
+
 zelinka = {k: v for k, v in zelinka.items() if k in ["CMIP6","CMIP5"]}
 zelinka = pd.json_normalize(zelinka, sep="_")
 zelinka.columns = zelinka.columns.str.split("_", expand=True)
