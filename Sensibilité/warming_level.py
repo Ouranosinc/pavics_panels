@@ -29,7 +29,16 @@ import numpy as np
 refyears = 29
 import xscen as xs
 
-tas_filt = tas.where(tas.generation=='CMIP6',drop=True)
+tas_filt = tas #.where(tas.generation=='CMIP6',drop=True)
+#print(tas_filt.unstack("model"))
+tas_filt = (tas_filt
+             .unstack("model")
+             .groupby("realization")
+             .first(skipna=True)
+             .stack({"model":("generation",
+                              "center",
+                              "scenario",
+                              "realization")}))
 
 refs_start = range(tas.year.values[0]+1,tas.year.values[-1]-refyears,10)
 w_reference_period = pn.widgets.IntRangeSlider(name="reference period", 
@@ -44,14 +53,18 @@ w_scenario    = pn.widgets.Select(name="scenario",    disabled = False ,
 w_realization = pn.widgets.Select(name="realization", disabled = False , 
                                   options=['all','first',*list(np.unique(tas_filt['realization'].values))] )
 
-w_models = pn.widgets.Select(name="Models",options=["CMIP6","Match Zelinka CMIP6",],value="Match Zelinka CMIP6")
+w_models = pn.widgets.Select(name="Models",options=["all","CMIP5","CMIP6","Match Zelinka CMIP6",],value="Match Zelinka CMIP6")
      
 fut = slice(2071,2100)
 
 def tas_select_model(model='CMIP6',scenario='all', refperiod=(1991,2020),*args):
     tas_sel = tas_filt
-    if model != 'CMIP6':
+    if 'CMIP6' in model:
+        tas_sel = tas_sel.where(tas.generation=='CMIP6',drop=True)
+    elif 'CMIP5' in model:
+        tas_sel = tas_sel.where(tas.generation=='CMIP5',drop=True)
         
+    if 'Zelinka' in model:
         sel = xr.DataArray(
             [el in zelinka.indexes['model'] for el in tas_sel.indexes['model'].droplevel('scenario')],
             dims=tas_sel.model.dims, coords = tas_sel.model.coords
@@ -84,8 +97,8 @@ def plot_kde(**kwargs):
     #df_plot = df.hvplot.kde(title=f'KDE of delta TAS for future period: {fut.start}-{fut.stop}',xlabel='Delta TAS (K)',ylabel='Density').options(width=plot_width,height=plot_height)
     y = df.tas.values
     N = len(y)
-    df_plot = pd.DataFrame({'tas':x,'density':kde.pdf(x)}).hvplot(x='tas',y='density',title=f'KDE of warming level, N={N}',xlabel='Year of threshold',ylabel='Density')
-    df_scatter = pd.DataFrame({'tas':y,'density':kde.pdf(y)}).hvplot.scatter(x='tas',y='density',title=f'KDE of warming level, N={N}',xlabel='Year of threshold',ylabel='Density')
+    df_plot = pd.DataFrame({'tas':x,'density':kde.pdf(x)}).hvplot(x='tas',y='density',title=f'KDE of warming level, N={N}',xlabel='Temperature (K)',ylabel='Density')
+    df_scatter = pd.DataFrame({'tas':y,'density':kde.pdf(y)}).hvplot.scatter(x='tas',y='density',title=f'KDE of warming level, N={N}',xlabel='Temperature (K)',ylabel='Density')
     df_plot = (df_plot * df_scatter).options(width=plot_width,height=plot_height)
     return pn.Column(pn.pane.HoloViews(df_plot,linked_axes=False),df_pane,height=plot_height*2,width=plot_width)
     
@@ -93,7 +106,7 @@ def plot_kde(**kwargs):
     #return pn.Column(df_plot,df_pane,height=plot_height*2,width=plot_width)
 from scipy import stats, interpolate
 import param
-w_threshold = pn.widgets.FloatSlider(name="threshold", value=1.5, start=0.0, end=6.0, step=0.25)
+w_threshold = pn.widgets.FloatSlider(name="threshold", value=1.5, start=0.0, end=6.0, step=0.5)
 print(type(w_threshold.value))
 class C(param.Parameterized):
     value = param.Number(default=1.5)
@@ -107,26 +120,81 @@ def start_spinner(*args):
 class Widgets(param.Parameterized):
     # input parameters:
     # (from widget.value)
-    model = param.String()
-    scenario = param.String()
-    realization = param.String()
-    threshold = param.Number(default=1.5)
-    refperiod = param.Tuple(default=(1991,2020))
+    model       = pn.widgets.Select(name="Model",
+                                    options=["CMIP6","Match Zelinka CMIP6"],
+                                    value="Match Zelinka CMIP6")
+    scenario    = pn.widgets.Select(name="scenario",
+                                    options=['all',*list(np.unique(tas_filt['scenario'].values))] )
+    realization = pn.widgets.Select(name="realization", disabled = False , 
+                                    options=['all','first',*list(np.unique(tas_filt['realization'].values))] )
+    threshold = pn.widgets.FloatSlider(name="threshold", 
+                                       value=1.5, 
+                                       start=0.0, 
+                                       end=6.0, 
+                                       step=0.25)
+    refperiod = pn.widgets.IntRangeSlider(name="reference period", 
+                                          start=1850, end=2100,value=(1850,1900))
     
     # output data:
     df_all    = param.DataFrame(instantiate=True)
     df_models = param.DataFrame(instantiate=True)
     
-    # output widgets:
+    data = param.ClassSelector(class_=param.Parameterized, is_instance=False)
     
+    # send widget values to data when they update (e.g. by user):
+    @pn.depends('model')
+    def _update_model(self):
+        self.data.model = self.model.value
+    
+    @pn.depends('scenario')
+    def _update_scenario(self):
+        self.data.scenario = self.scenario.value
+    
+    @pn.depends('realization')
+    def _update_realization(self):
+        self.data.realization = self.realization.value_throttled
+    
+    @pn.depends('threshold')
+    def _update_threshold(self):
+        self.data.threshold = self.threshold.value_throttled
+    
+    @pn.depends('refperiod')
+    def _update_refperiod(self):
+        self.data.refperiod = self.refperiod.value_throttled
+    
+    # plotting widgets:
+    @pn.depends('df_all','df_models',watch=True)
+    def year_kde(self):
+        tas_sel,ref = tas_select_model(*list(self.data.values()))
+        delta = tas_sel.sel(year=fut).mean(dim="year") - ref
+        df = delta.to_dataframe()
+        x = np.linspace(min(0,df.tas.min()),max(6,df.tas.max()),1000)
+        kde = stats.gaussian_kde(df.tas.dropna().values)
+        return pn.pane.Curve(x,kde.pdf(x))
+    
+    # set up layout:
+    def panel(self):
+        return pn.Column(
+                    pn.Row(self.models,self.scenario),
+                    self.refperiod,
+                    pn.Tabs(
+                        pn.Column(
+                            self.threshold,
+                            self.year_kde,
+                            name='Year KDE'
+                            ),
+                        )
+                    )   
+
+
 class Data(param.Parameterized):
     # input parameters:
     # trigger these to update the data.
-    model = param.String()
-    scenario = param.String()
+    model       = param.String()
+    scenario    = param.String()
     realization = param.String()
-    threshold = param.Number(default=1.5)
-    refperiod = param.Tuple(default=(1991,2020))
+    threshold   = param.Number(default=1.5)
+    refperiod   = param.Tuple(default=(1991,2020))
     
     # output parameters
     df_all    = param.DataFrame(instantiate=True)
@@ -141,13 +209,16 @@ data = Data()
             watch=True,
             on_init=True
             )
-def update_df_years(**kwargs):
+def update_df_years(model=w_models.value,
+                    scenario=w_scenario.value,
+                    refperiod=w_reference_period.value_throttled,
+                    threshold=w_threshold.value_throttled):
     loading.color = 'warning'
-    tas_sel,ref = tas_select_model(*list(kwargs.values()))
+    tas_sel,ref = tas_select_model(model,scenario,refperiod)
     tas_sel = tas_sel.rolling(year=30,center=True).mean()
     print('update_df_years')
     delta = tas_sel - ref
-    delta = delta.where(delta > kwargs['threshold'],drop=True)
+    delta = delta.where(delta > threshold,drop=True)
     df = delta.to_dataframe()
     deltayr = {}
     #deltayr['year'] = np.nan
@@ -182,7 +253,7 @@ def year_kde(df_all,df_models):
                                           ylabel='Density')
     df_scatter = df_scatter.opts(tools=['hover'])
     df_plot = (df_plot * df_scatter).options(ylim=(0,0.06),width=plot_width,height=plot_height)
-    df_pane = pn.pane.DataFrame(df_models,max_height=plot_height,sizing_mode='stretch_both',max_rows=10)
+    df_pane = pn.pane.DataFrame(df_models.sort_values(by='year'),max_height=plot_height,sizing_mode='stretch_both')
     loading.color = 'success'
     
     return pn.Column(pn.pane.HoloViews(df_plot,linked_axes=False),df_pane,height=plot_height*2,width=plot_width)
@@ -209,6 +280,7 @@ layout = pn.Column(
 )
         
 dash.main.append(layout)
+pn.state.onload(update_df_years)
 dash.servable()
 
 
