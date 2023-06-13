@@ -30,7 +30,6 @@ refyears = 29
 import xscen as xs
 
 tas_filt = tas #.where(tas.generation=='CMIP6',drop=True)
-#print(tas_filt.unstack("model"))
 tas_filt = (tas_filt
              .unstack("model")
              .groupby("realization")
@@ -53,7 +52,7 @@ w_scenario    = pn.widgets.Select(name="scenario",    disabled = False ,
 w_realization = pn.widgets.Select(name="realization", disabled = False , 
                                   options=['all','first',*list(np.unique(tas_filt['realization'].values))] )
 
-w_models = pn.widgets.Select(name="Models",options=["all","CMIP5","CMIP6","Match Zelinka CMIP6",],value="Match Zelinka CMIP6")
+w_models = pn.widgets.Select(name="Models",options=["all","CMIP5","Match Zelinka CMIP5","CMIP6","Match Zelinka CMIP6",],value="Match Zelinka CMIP6")
      
 fut = slice(2071,2100)
 
@@ -220,12 +219,15 @@ def update_df_years(model=w_models.value,
     delta = tas_sel - ref
     delta = delta.where(delta > threshold,drop=True)
     df = delta.to_dataframe()
-    deltayr = {}
+    deltayr = []
     #deltayr['year'] = np.nan
+    #print(*delta.model.coords.keys())
     for model in delta.model.values:
-        deltayr[model] = delta.sel(model=model).dropna(dim='year',how='all').year.min()
-    deltayr = pd.DataFrame.from_dict(deltayr,orient='index',columns=['year'])
-    deltayr['weight'] = 1 #stats.norm.pdf(deltayr.year,deltayr.year.mean(),deltayr.year.std())  
+        deltayr.append((*[x for x in model],delta.sel(model=model).dropna(dim='year',how='all').year.min().item()))
+    #print([*[x for x in delta.model.coords.keys() if x != 'model'],'year'])
+    deltayr = pd.DataFrame.from_records(deltayr,columns=[*[x for x in delta.model.coords.keys() if x != 'model'],'year'])
+    #print(deltayr)
+    deltayr['weight'] = 1 #stats.norm.pdf(deltayr.year,deltayr.year.mean(),deltayr.year.std()) 
     kde = stats.gaussian_kde(deltayr.year,weights=deltayr.weight)
     
     x_all = np.linspace(min(2000,deltayr.year.min()),2100,1000)
