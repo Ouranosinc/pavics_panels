@@ -249,13 +249,13 @@ def year_kde(df_all,df_models):
     df_plot    = df_all.hvplot(x='year',y='density',title=f'KDE of warming level, N={N}',xlabel='Year of threshold',ylabel='Density')
     df_plot = df_plot.opts(tools=[])
     df_scatter = df_models.hvplot.scatter(x='year',y='density', 
-                                          hover_cols=['year','model','density','weight'],
+                                          hover_cols=['year','density','center','scenario'],
                                           title=f'KDE of warming level, N={N}',
                                           xlabel='Year of threshold',
                                           ylabel='Density')
     df_scatter = df_scatter.opts(tools=['hover'])
     df_plot = (df_plot * df_scatter).options(ylim=(0,0.06),width=plot_width,height=plot_height)
-    df_pane = pn.pane.DataFrame(df_models.sort_values(by='year'),max_height=plot_height,sizing_mode='stretch_both')
+    df_pane = pn.pane.DataFrame(df_models,max_height=plot_height,sizing_mode='stretch_both')
     loading.color = 'success'
     
     return pn.Column(pn.pane.HoloViews(df_plot,linked_axes=False),df_pane,height=plot_height*2,width=plot_width)
