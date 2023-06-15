@@ -1,7 +1,7 @@
 
 import pandas as pd
 import xarray as xr
-from load import load_global_tas, load_sherwood, load_zelinka
+from sensitivity.core.load import load_global_tas, load_sherwood, load_zelinka
 tas = load_global_tas().set_index("year")
 tas.columns = tas.columns.str.split("_", expand=True)
 tas = xr.DataArray(tas,dims=['year','model'],name='tas').rename({"model_level_0":"generation","model_level_1":"center","model_level_2":"scenario","model_level_3":"realization"})
@@ -9,7 +9,10 @@ import json
 import urllib
 from pathlib import Path
 zelinka_url = "https://raw.githubusercontent.com/mzelinka/cmip56_forcing_feedback_ecs/master/cmip56_forcing_feedback_ecs.json"
-zelinka_file = Path("zelinka_full.json")
+from constants.constants import file_zelinka
+
+zelinka_file = file_zelinka
+print(file_zelinka)
 if zelinka_file.is_file():
     zelinka = json.load(open(zelinka_file))
 else:
@@ -26,6 +29,7 @@ zelinka = xr.Dataset(zelinka).rename({"dim_0":"model","dim_0_level_0":"generatio
 #ecs = load_zelinka()
 sherwood = load_sherwood()
 
+from . import sensitivity
 
 import panel as pn
 import holoviews as hv
@@ -45,7 +49,7 @@ tas_filt = (tas_filt
                               "center",
                               "scenario",
                               "realization")}))
-
+#tas_filt = tas_filt.groupby(tas_filt.model.realization).first(skipna=True)
 refs_start = range(tas.year.values[0]+1,tas.year.values[-1]-refyears,10)
 w_reference_period = pn.widgets.IntRangeSlider(name="reference period", 
                                                start=1850, end=2100,value=(1850,1900))
@@ -205,9 +209,10 @@ class Data(param.Parameterized):
     # output parameters
     df_all    = param.DataFrame(instantiate=True)
     df_models = param.DataFrame(instantiate=True)
+    most_likely = param.Tuple(default=(0,0,0))
 
 data = Data()
-
+import scipy
 @pn.depends(model=w_models,
             scenario=w_scenario,
             refperiod=w_reference_period.param.value_throttled,
@@ -243,25 +248,49 @@ def update_df_years(model=w_models.value,
     y_models = kde.pdf(x_models)
     deltayr['density'] = y_models
     
+    cdf = scipy.integrate.cumtrapz(y_all,x_all,initial=0)
+    
+    max_prob = 0
+    most_likely = (0,0,0)
+    for x in np.arange(min(2000,deltayr.year.min()),2100,1):
+        
+        prob_x =  np.interp(x+29,x_all,cdf,left=0,right=1) - np.interp(x,x_all,cdf,left=0,right=1)
+        #print(x,x+29,prob_x)
+        if prob_x > max_prob:
+            most_likely = (x,x+29,prob_x)
+            max_prob = prob_x
     with param.parameterized.batch_call_watchers(data):
         data.df_all = pd.DataFrame({'year':x_all,'density':y_all})
         data.df_models = deltayr
+        data.most_likely = most_likely
         
 @pn.depends(data.param.df_all,
-            data.param.df_models)
-def year_kde(df_all,df_models):
+            data.param.df_models,
+            data.param.most_likely,)
+def year_kde(df_all,df_models,most_likely):
     if (not(hasattr(df_all,'empty')) or df_all.empty) or (not(hasattr(df_models,'empty')) or df_models.empty):
         return pn.pane.HoloViews()
     N = len(df_models)
-    df_plot    = df_all.hvplot(x='year',y='density',title=f'KDE of warming level, N={N}',xlabel='Year of threshold',ylabel='Density')
-    df_plot = df_plot.opts(tools=[])
+    df_plot    = df_all.hvplot(x='year',
+                                     y='density',
+                                     title=f'KDE of warming level, N={N}, most likely 30-year range: {most_likely[0]} to {most_likely[1]}, P={most_likely[2]:.3f}',
+                                     xlabel='Year of threshold',
+                                     ylabel='Density')
+    df_plot = df_plot.opts(tools=[],
+                           line_width=1.5,
+                           line_alpha=1)
+    df_area = (df_all
+                .where(df_all.year >= most_likely[0])
+                .where(df_all.year <= most_likely[1])
+                .hvplot.area(x='year',y='density')
+                .opts(alpha=0.4,line_alpha=0,tools=[])
+              )
     df_scatter = df_models.hvplot.scatter(x='year',y='density', 
-                                          hover_cols=['year','density','center','scenario'],
-                                          title=f'KDE of warming level, N={N}',
-                                          xlabel='Year of threshold',
-                                          ylabel='Density')
+                                          hover_cols=['year','density','center','scenario'])
     df_scatter = df_scatter.opts(tools=['hover'])
-    df_plot = (df_plot * df_scatter).options(ylim=(0,0.06),width=plot_width,height=plot_height)
+    df_plot = (df_area * df_plot * df_scatter).options(ylim=(0,0.06),
+                                             width=plot_width,
+                                             height=plot_height)
     df_pane = pn.pane.DataFrame(df_models,max_height=plot_height,sizing_mode='stretch_both')
     loading.color = 'success'
     
@@ -269,29 +298,31 @@ def year_kde(df_all,df_models):
     
 
 # %%
-dash = pn.template.BootstrapTemplate(title="warming level",)
-dash.header.append(loading)
-layout = pn.Column(
-    pn.Row(w_models,w_scenario),
-    w_reference_period,
-    pn.Tabs(
-       pn.Column(
-           w_threshold,
-           year_kde,
-           name='Year KDE'
-           ),
-       pn.Column(
-           pn.panel(f'future period: **{fut.start}-{fut.stop}**',height=w_threshold.height),
-           plot_kde,
-           name='Surface Temperature KDE'
-           ),
-    )
-)
-        
-dash.main.append(layout)
-pn.state.onload(update_df_years)
-dash.servable()
 
+if __name__ == '__main__':
+    dash = pn.template.BootstrapTemplate(title="warming level",)
+    dash.header.append(loading)
+    layout = pn.Column(
+        pn.Row(w_models,w_scenario),
+        w_reference_period,
+        pn.Tabs(
+        pn.Column(
+            w_threshold,
+            year_kde,
+            name='Year KDE'
+            ),
+        pn.Column(
+            pn.panel(f'future period: **{fut.start}-{fut.stop}**',height=w_threshold.height),
+            plot_kde,
+            name='Surface Temperature KDE'
+            ),
+        )
+    )
+            
+    dash.main.append(layout)
+    pn.state.onload(update_df_years)
+    dash.servable()
+    
 
 
 
