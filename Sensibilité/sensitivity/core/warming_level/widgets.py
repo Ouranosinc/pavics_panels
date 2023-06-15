@@ -40,9 +40,8 @@ class Widgets(WidgetInterface):
         )
     def set_watchers(self):
         for widget in self.inputs:
-            
             widget.item.param.watch(self.update_data(widget.data_attr),widget.watch)
-            
+            widget.item.param.trigger(widget.watch)
     def create_widgets(self):
         # input widgets: list of  Widget(pn.widget,watch_value, data_attribute)
         self.inputs.append(
@@ -71,10 +70,10 @@ class Widgets(WidgetInterface):
                 'threshold'
                 )
             )
-        self.inputs.append(Widget(pn.widgets.Select(name="generation"),data_attr='generation'))
-        self.inputs.append(Widget(pn.widgets.Select(name="center"),data_attr='center'))
-        self.inputs.append(Widget(pn.widgets.Select(name="scenario"),data_attr='scenario'))
-        self.inputs.append(Widget(pn.widgets.Select(name="realization") ,data_attr='realization'))
+        self.inputs.append(Widget(pn.widgets.Select(name="generation" , options=['']),data_attr='generation'))
+        self.inputs.append(Widget(pn.widgets.Select(name="center"     , options=['']),data_attr='center'))
+        self.inputs.append(Widget(pn.widgets.Select(name="scenario"   , options=['']),data_attr='scenario'))
+        self.inputs.append(Widget(pn.widgets.Select(name="realization", options=['']) ,data_attr='realization'))
     
     def update_data(self, name):
         print('Creating helper in Widgets:',name)
@@ -82,6 +81,8 @@ class Widgets(WidgetInterface):
             print('updating data in Widgets:',name)
             if hasattr(self.data.input,name):
                 self.data.input[name] = event.new
+            else:
+                warnings.warn(f'Attribute not found: {name}, not updating data.')
         return event_fn
         
     @param.depends('data.output.param', watch=True)

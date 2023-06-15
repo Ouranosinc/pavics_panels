@@ -1,13 +1,13 @@
 from .interfaces import DataInterface
 import param
 class Input(DataInterface):
-    toggle = param.Boolean(default=True)
-    generation = param.String()
-    center = param.String()
-    scenario = param.String()
+    toggle = param.Boolean()
+    generation =  param.String()
+    center =      param.String()
+    scenario =    param.String()
     realization = param.String()
-    threshold = param.Number(default=1.5)
-    refperiod = param.Tuple(default=(1991,2020))
+    threshold = param.Number()
+    refperiod = param.Tuple()
 
 class Output(DataInterface):
     value  = param.String()
