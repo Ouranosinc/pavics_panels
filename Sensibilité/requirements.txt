@@ -1,0 +1,6 @@
+panel
+pandas
+xarray
+param
+holoviews
+numpy
