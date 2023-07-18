@@ -5,6 +5,7 @@ Elle permet aussi de télécharger un json des modèles choisis, ainsi que que d
 Usage:
 
 ```
+pip install -r requirements.txt
 pip install -e .
 ./run.sh
 ```
