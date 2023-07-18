@@ -49,32 +49,12 @@ class Widgets(WidgetInterface):
             widget.item.param.trigger(widget.watch)
     def create_widgets(self):
         # input widgets: list of  Widget(pn.widget,watch_value, data_attribute)
-        self.inputs.append(
-            Widget(
-                pn.widgets.Checkbox(
-                    name='Only show Zelinka models'),
-                    data_attr='toggle')
-            )
-        self.inputs.append(
-            Widget(
-                pn.widgets.IntRangeSlider(
-                    name="reference period",
-                    start=1850, end=2100,value=(1850,1900),step=10
-                    ),
-                'value_throttled',
-                'refperiod'
-                )
-            )
-        self.inputs.append(
-            Widget(
-                pn.widgets.FloatSlider(
-                    name="threshold",
-                    start=0.0, end=6.0, step=0.5,value=1.5
-                    ),
-                'value_throttled',
-                'threshold'
-                )
-            )
+        zelinka_toggle = pn.widgets.Checkbox(name='Only show Zelinka models')
+        self.inputs.append(Widget(zelinka_toggle,data_attr='toggle'))
+        ref_slider = pn.widgets.IntRangeSlider(name="reference period",start=1850, end=2100,value=(1850,1900),step=10)
+        self.inputs.append(Widget(ref_slider,'value_throttled','refperiod'))
+        thresh_slider = pn.widgets.FloatSlider(name="threshold",start=0.0, end=6.0, step=0.5,value=1.5)
+        self.inputs.append(Widget(thresh_slider,'value_throttled','threshold'))
         self.inputs.append(Widget(pn.widgets.Select(name="generation" , options=['']),data_attr='generation'))
         self.inputs.append(Widget(pn.widgets.Select(name="center"     , options=['']),data_attr='center'))
         self.inputs.append(Widget(pn.widgets.Select(name="scenario"   , options=['']),data_attr='scenario'))

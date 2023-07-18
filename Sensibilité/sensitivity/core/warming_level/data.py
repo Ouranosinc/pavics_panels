@@ -20,7 +20,7 @@ class Input(DataInterface):
     zelinka = param.ClassSelector(class_=xr.Dataset)
     def __init__(self,**params):
         super().__init__(**params)
-        
+        # load static data: 
         tas = load_global_tas().set_index("year")
         tas.columns = tas.columns.str.split("_", expand=True)
         tas = xr.DataArray(tas,dims=['year','model'],name='tas').rename({"model_level_0":"generation","model_level_1":"center","model_level_2":"scenario","model_level_3":"realization"})
