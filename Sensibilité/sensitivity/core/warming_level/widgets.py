@@ -2,8 +2,13 @@ from .interfaces import DataInterface,WidgetInterface
 import param
 import panel as pn
 from panel.viewable import Viewer
+import numpy as np
+
 class Widget(Viewer):
-    
+    ''' Simple wrapper for panel widgets that 
+        include the name of variables to watch for changes (e.g. 'value_throttled'),
+        and the data attribute on which to apply the changes.
+    '''
     item = param.ClassSelector(class_=pn.widgets.base.Widget)
     watch = param.String()
     data_attr = param.String()
@@ -30,10 +35,10 @@ class Widgets(WidgetInterface):
             self.data = data
             self.create_widgets()
             self.display = pn.pane.Str(name='Display')
-        
+            self.table = pn.pane.DataFrame(name='Table',max_rows=25,show_dimensions=True)
         self.set_watchers()
         self._input_layout = pn.FlexBox(*self.inputs,flex_direction='column')
-        self._output_layout = pn.Column(self.display)
+        self._output_layout = pn.Row(self.display,self.table)
         self._layout = pn.Row(
             self._input_layout,
             self._output_layout
@@ -47,14 +52,14 @@ class Widgets(WidgetInterface):
         self.inputs.append(
             Widget(
                 pn.widgets.Checkbox(
-                    name='Click to toggle'),
+                    name='Only show Zelinka models'),
                     data_attr='toggle')
             )
         self.inputs.append(
             Widget(
                 pn.widgets.IntRangeSlider(
                     name="reference period",
-                    start=1850, end=2100,value=(1850,1900)
+                    start=1850, end=2100,value=(1850,1900),step=10
                     ),
                 'value_throttled',
                 'refperiod'
@@ -84,11 +89,26 @@ class Widgets(WidgetInterface):
             else:
                 warnings.warn(f'Attribute not found: {name}, not updating data.')
         return event_fn
+    
+    @param.depends('data.input.tas', watch=True)
+    def intialize_widgets(self):
+        print('initializing widget options in Widgets')
+        self.inputs[3].item.options = ['all',*np.unique(self.data.output.tas.generation.values)]
+        self.inputs[4].item.options = ['all',*np.unique(self.data.output.tas.center.values)]
+        self.inputs[5].item.options = ['all',*np.unique(self.data.output.tas.scenario.values)]
+        self.inputs[6].item.options = ['all','first']
         
-    @param.depends('data.output.param', watch=True)
-    def update_display(self):
-        print('updating display in Widgets')
+    
+    @param.depends('data.output.tas_df', watch=True)
+    def update_table(self):
+        #print('updating display in Widgets')
+        #self.display.object = self.data.output.value
+        self.table.object = self.data.output.tas_df
+        
+    @param.depends('data.output.value', watch=True)
+    def update_string(self):
         self.display.object = self.data.output.value
+    
     
     def __panel__(self):
         print('rerendering')
