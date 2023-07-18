@@ -3,11 +3,12 @@ import xarray as xr
 import pandas as pd
 import json
 
-from .interfaces import DataInterface
+from .interfaces import ModelInterface
 from sensitivity.core.load import load_global_tas, load_sherwood, load_zelinka
 from sensitivity.constants.constants import file_zelinka
+# Approximately: Model, from MVC abstract
 
-class Input(DataInterface):
+class ModelControl(ModelInterface):
     toggle = param.Boolean()
     generation =  param.String()
     center =      param.String()
@@ -43,7 +44,7 @@ class Input(DataInterface):
             
             self.zelinka = xr.Dataset(zelinka).rename({"dim_0":"model","dim_0_level_0":"generation","dim_0_level_1":"center","dim_0_level_2":"realization"})
 
-class Output(DataInterface):
+class ModelView(ModelInterface):
     value  = param.String()
     tas = param.ClassSelector(class_=xr.DataArray)
     tas_df = param.DataFrame()
@@ -54,16 +55,16 @@ class Output(DataInterface):
         self.tas = xr.DataArray([],name='na')
         self.delta = xr.DataArray([],name='na')
 
-class Data(DataInterface):
+class Model(ModelInterface):
     # simple data class to hold the input/output parameters
     # input:
-    input = param.ClassSelector(class_=Input)
-    output = param.ClassSelector(class_=Output)
+    input = param.ClassSelector(class_=ModelControl)
+    output = param.ClassSelector(class_=ModelView)
 
     # output:
     
     def __init__(self, **params):
         super().__init__(**params)
-        self.input = Input()
-        self.output = Output()
+        self.input = ModelControl()
+        self.output = ModelView()
         

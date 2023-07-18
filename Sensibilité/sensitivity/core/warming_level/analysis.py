@@ -1,9 +1,11 @@
-from .interfaces import DataInterface, AnalysisInterface
+from .interfaces import ModelInterface, ControlInterface
 import param
 import xarray as xr
 
-class Analysis(AnalysisInterface):
-    data = param.ClassSelector(class_=DataInterface)
+# Approximately: Control, from MVC abstract
+
+class Control(ControlInterface):
+    data = param.ClassSelector(class_=ModelInterface)
     
     def __init__(self, data, **params):
         super().__init__(**params)

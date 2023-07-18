@@ -1,8 +1,10 @@
-from .interfaces import DataInterface,WidgetInterface
+from .interfaces import ModelInterface,ViewInterface
 import param
 import panel as pn
 from panel.viewable import Viewer
 import numpy as np
+
+# approximately: View, from MVC abstract
 
 class Widget(Viewer):
     ''' Simple wrapper for panel widgets that 
@@ -21,8 +23,8 @@ class Widget(Viewer):
     def __panel__(self):
         return self.item
     
-class Widgets(WidgetInterface):
-    data = param.ClassSelector(class_=DataInterface)
+class View(ViewInterface):
+    data = param.ClassSelector(class_=ModelInterface)
     
     # input widgets:
     inputs = param.List([],item_type=Widget)
